@@ -1,33 +1,189 @@
 vars:
+  TokenUrl: https://fp-dev.urbn.com/api/token/v0
+  CheckoutUrl: https://fp-dev.urbn.com/api/checkout/v0
   Site: fp-us
   Channel: web
   Currency: USD
   Language: en-US
+  UserEmail: testify@mailinator.com
 actions:
   -
-    #Check health
+    name: HealthCheck
     method: GET
-    url: http://localhost:8080
+    url: "{{.TokenUrl}}"
     url_pattern: "health"
     resp_values:
       json:
         AppName: appName
-    checks:
+    expectations:
+      -
+        type: status
+        arguments:
+          - 200
+        fatal: true
       -
         type: compare_string
         arguments:
           - token-svc
           - "{{.AppName}}"
+        fatal: false
   -
-    #Get a token
+    name: GetAToken
     method: POST
-    url: http://localhost:8080
+    url: "{{.TokenUrl}}"
     headers:
-      channel: "{{.Channel}}"
-      currency: "{{.Currency}}"
-      language: "{{.Language}}"
-    url_pattern: "v0/{{.Site}}/auth"
+      X-Urbn-Channel: "{{.Channel}}"
+      X-Urbn-Currency: "{{.Currency}}"
+      X-Urbn-language: "{{.Language}}"
+    url_pattern: "{{.Site}}/auth"
     resp_values:
       json:
         Token: authToken
         ReAuthToken: reAuthToken
+    expectations:
+      - type: status
+        arguments:
+          - 200
+        fatal: true
+    actions:
+      - type: print
+        arguments:
+          - Token
+  -
+    name: AddToCart
+    method: POST
+    url: "{{.CheckoutUrl}}"
+    headers:
+      Authorization: "Bearer {{.Token}}"
+      X-Urbn-Channel: "{{.Channel}}"
+      X-Urbn-Currency: "{{.Currency}}"
+      X-Urbn-language: "{{.Language}}"
+    url_pattern: "{{.Site}}/carts/items"
+    body: |+
+          {
+               "cartType": "TRANSACTIONAL",
+               "multiLine": false,
+               "quantity": 1,
+               "poolId": "GB_DIRECT",
+               "skuId": "45921137",
+               "productId": "FP-45920915-000",
+               "analytics": {
+                   "navigationId": "dyrectray-TopProducts"
+               }
+           }
+    resp_values:
+      json:
+        ItemId: id
+        CartId: cartId
+    expectations:
+      - type: status
+        arguments:
+          - 201
+        fatal: true
+    actions:
+      - type: print
+        arguments:
+          - ItemId
+          - CartId
+  -
+    name: GetCartItems
+    method: GET
+    url: "{{.CheckoutUrl}}"
+    headers:
+      Authorization: "Bearer {{.Token}}"
+      X-Urbn-Channel: "{{.Channel}}"
+      X-Urbn-Currency: "{{.Currency}}"
+      X-Urbn-language: "{{.Language}}"
+    url_pattern: "{{.Site}}/carts/items"
+    resp_values:
+      json:
+        ItemId: id
+        Cart: cart
+    expectations:
+      - type: status
+        arguments:
+          - 200
+        fatal: true
+    actions:
+      - type: print
+        arguments:
+          - Cart
+  -
+    name: PostToCarts
+    method: POST
+    url: "{{.CheckoutUrl}}"
+    headers:
+      Authorization: "Bearer {{.Token}}"
+      X-Urbn-Channel: "{{.Channel}}"
+      X-Urbn-Currency: "{{.Currency}}"
+      X-Urbn-language: "{{.Language}}"
+    url_pattern: "{{.Site}}/carts"
+    resp_values:
+      json:
+        ItemId: id
+        Cart: cart
+        BucketId: cart.shipBuckets.0.id
+    expectations:
+      - type: status
+        arguments:
+          - 201
+        fatal: true
+    actions:
+      - type: print
+        arguments:
+          - Cart
+  -
+    name: Add Anon user to Cart
+    method: POST
+    url: "{{.CheckoutUrl}}"
+    headers:
+      Authorization: "Bearer {{.Token}}"
+      X-Urbn-Channel: "{{.Channel}}"
+      X-Urbn-Currency: "{{.Currency}}"
+      X-Urbn-language: "{{.Language}}"
+    url_pattern: "{{.Site}}/carts/users"
+    body: |+
+      {
+        "email": "{{.UserEmail}}"
+      }
+    expectations:
+      - type: status
+        arguments:
+          - 204
+        fatal: true
+  -
+    name: Add Shipping Address
+    method: POST
+    url: "{{.CheckoutUrl}}"
+    headers:
+      Authorization: "Bearer {{.Token}}"
+      X-Urbn-Channel: "{{.Channel}}"
+      X-Urbn-Currency: "{{.Currency}}"
+      X-Urbn-language: "{{.Language}}"
+    url_pattern: "{{.Site}}/carts/buckets/{{.BucketId}}/addresses"
+    body: |+
+      {
+        "city": "Philadelphia",
+        "name": {
+          "last": "John",
+          "first": "Roszkowski"
+        },
+        "address1": "1132 E Hewson St",
+        "phoneNumber": "2153332323",
+        "country": "US",
+        "postalCode": "19112",
+        "region": "PA"
+      }
+    resp_values:
+      json:
+        AddressId: addressId
+    expectations:
+      - type: status
+        arguments:
+          - 201
+        fatal: true
+    actions:
+      - type: print
+        arguments:
+          - AddressId
+

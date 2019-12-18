@@ -7,3 +7,5 @@ Here the Imperius allows you to control APIs at will from the command line using
 Installation:
 
 - Will be installed from source or brew.
+
+How to use it:

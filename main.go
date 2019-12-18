@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"html/template"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -21,19 +21,27 @@ type TestRun struct {
 	Desc string `yaml:"desc"`
 }
 
-type Check struct {
+type Expectation struct {
+	Type      string   `yaml:"type"`
+	Arguments []string `yaml:"arguments"`
+	Fatal     bool     `yaml:"fatal"`
+}
+
+type Action struct {
 	Type      string   `yaml:"type"`
 	Arguments []string `yaml:"arguments"`
 }
 
 type ScriptLine struct {
-	Url        string                       `yaml:"url"`
-	Headers    map[string]string            `yaml:"headers"`
-	Method     string                       `yaml:"method"`
-	URLPattern string                       `yaml:"url_pattern"`
-	Body       string                       `yaml:"body"`
-	RespValues map[string]map[string]string `yaml:"resp_values"`
-	Checks     []Check                      `yaml:"checks"`
+	Name         string                       `yaml:"name"`
+	Url          string                       `yaml:"url"`
+	Headers      map[string]string            `yaml:"headers"`
+	Method       string                       `yaml:"method"`
+	URLPattern   string                       `yaml:"url_pattern"`
+	Body         string                       `yaml:"body"`
+	RespValues   map[string]map[string]string `yaml:"resp_values"`
+	Expectations []Expectation                `yaml:"expectations"`
+	Actions      []Action                     `yaml:"actions"`
 }
 
 type Script struct {
@@ -43,37 +51,41 @@ type Script struct {
 
 func main() {
 	if len(os.Args) != 2 {
-		log.Println("No script file given or unexpected arguments supplied  --  imperius [script_filename]")
+		fmt.Println("No script file given or unexpected arguments supplied  --  imperius [script_filename]")
 		os.Exit(0)
 	}
 	scriptFilename := os.Args[1]
 
 	scriptFile, err := ioutil.ReadFile(scriptFilename)
 	if err != nil {
-		log.Printf("yamlFile.Get err   #%v ", err)
+		fmt.Printf("yamlFile.Get err   #%v ", err)
+		os.Exit(0)
 	}
 
 	var script Script
 	err = yaml.Unmarshal(scriptFile, &script)
 	if err != nil {
-		log.Fatalf("Unmarshal: %v", err)
+		fmt.Printf("Unmarshal: %v", err)
+		os.Exit(0)
 	}
 
 	for _, line := range script.ScriptLines {
+		fmt.Println("\n-----\nRunning Action:", line.Name)
 		vals, errs := runLine(line, script.ScriptValues)
 		if len(errs) == 0 {
 			for k, v := range vals {
 				script.ScriptValues[k] = v
 			}
+		} else {
+			for _, err := range errs {
+				fmt.Println(err)
+			}
 		}
 	}
-
-	fmt.Printf("%+v\n", script.ScriptValues)
-
+	fmt.Printf("-----\n")
 }
 
 func runLine(inLine ScriptLine, values map[string]string) (map[string]string, []error) {
-	fmt.Printf("- %+v\n\t", inLine)
 	line := applyTemplate(&inLine, values)
 	urlPattern := line.URLPattern
 	body := &line.Body
@@ -94,8 +106,14 @@ func runLine(inLine ScriptLine, values map[string]string) (map[string]string, []
 		}
 	}
 
-	//doChecks(statusCode, respBoby, )
+	err = checkExpectations(line.Expectations, statusCode)
+	if err == nil {
+		fmt.Printf("PASS - Expectations all within normal parameters.\n")
+	} else {
+		errs = append(errs, err)
+	}
 
+	performActions(line.Actions, scriptValues)
 	return scriptValues, errs
 }
 
@@ -155,6 +173,34 @@ func makeHttpRequest(method, serviceUrl string, headers map[string]string, reqBo
 	return resp.StatusCode, string(body), nil
 }
 
-func doChecks() {
+func checkExpectations(expectations []Expectation, statusCode int) error {
+	for _, expectation := range expectations {
+		switch expectation.Type {
+		case "status":
+			expected, err := strconv.Atoi(expectation.Arguments[0])
+			if err != nil {
+				return err
+			}
+			if expected != statusCode {
+				errStr := fmt.Sprintf("status code expected %d was not what was returned %d", expected, statusCode)
+				if expectation.Fatal {
+					fmt.Printf("FATAL: %s\n-----\n", errStr)
+					os.Exit(0)
+				}
+				return errors.New(errStr)
+			}
+		}
+	}
+	return nil
+}
 
+func performActions(actions []Action, scriptValues map[string]string) {
+	for _, action := range actions {
+		switch action.Type {
+		case "print":
+			for _, argument := range action.Arguments {
+				fmt.Printf("%s = %s\n", argument, scriptValues[argument])
+			}
+		}
+	}
 }
