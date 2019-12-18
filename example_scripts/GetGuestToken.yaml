@@ -1,0 +1,33 @@
+vars:
+  Site: fp-us
+  Channel: web
+  Currency: USD
+  Language: en-US
+actions:
+  -
+    #Check health
+    method: GET
+    url: http://localhost:8080
+    url_pattern: "health"
+    resp_values:
+      json:
+        AppName: appName
+    checks:
+      -
+        type: compare_string
+        arguments:
+          - token-svc
+          - "{{.AppName}}"
+  -
+    #Get a token
+    method: POST
+    url: http://localhost:8080
+    headers:
+      channel: "{{.Channel}}"
+      currency: "{{.Currency}}"
+      language: "{{.Language}}"
+    url_pattern: "v0/{{.Site}}/auth"
+    resp_values:
+      json:
+        Token: authToken
+        ReAuthToken: reAuthToken
