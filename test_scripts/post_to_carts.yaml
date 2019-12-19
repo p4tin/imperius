@@ -1,0 +1,23 @@
+name: PostToCarts
+method: POST
+url: "{{.CheckoutUrl}}"
+headers:
+  Authorization: "Bearer {{.Token}}"
+  X-Urbn-Channel: "{{.Channel}}"
+  X-Urbn-Currency: "{{.Currency}}"
+  X-Urbn-language: "{{.Language}}"
+url_pattern: "{{.Site}}/carts"
+resp_values:
+  json:
+    ItemId: id
+    Cart: cart
+    BucketId: cart.shipBuckets.0.id
+expectations:
+  - type: status
+    arguments:
+      - 201
+    fatal: true
+actions:
+  - type: print
+    arguments:
+      - Cart

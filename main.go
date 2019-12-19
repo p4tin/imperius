@@ -33,6 +33,7 @@ type Action struct {
 }
 
 type ScriptLine struct {
+	Import       string                       `yaml:"import"`
 	Name         string                       `yaml:"name"`
 	Url          string                       `yaml:"url"`
 	Headers      map[string]string            `yaml:"headers"`
@@ -46,7 +47,8 @@ type ScriptLine struct {
 
 type Script struct {
 	ScriptValues map[string]string `yaml:"vars"`
-	ScriptLines  []ScriptLine      `yaml:"actions"`
+	ScriptLines  []ScriptLine      `yaml:"steps"`
+	ImportFiles  map[string]string `yaml:"imports"`
 }
 
 func main() {
@@ -58,7 +60,7 @@ func main() {
 
 	scriptFile, err := ioutil.ReadFile(scriptFilename)
 	if err != nil {
-		fmt.Printf("yamlFile.Get err   #%v ", err)
+		fmt.Printf("ioutil.Readfile err   #%v ", err)
 		os.Exit(0)
 	}
 
@@ -69,20 +71,45 @@ func main() {
 		os.Exit(0)
 	}
 
-	for _, line := range script.ScriptLines {
-		fmt.Println("\n-----\nRunning Action:", line.Name)
+	//resolve imports
+	for index, line := range script.ScriptLines {
+		if line.Import != "" {
+			partial, err := ioutil.ReadFile(script.ImportFiles[line.Import])
+			if err != nil {
+				fmt.Printf("ioutil.Readfile err   #%v ", err)
+				os.Exit(0)
+			}
+			var line ScriptLine
+			err = yaml.Unmarshal(partial, &line)
+			if err != nil {
+				fmt.Printf("Unmarshal: %v", err)
+				os.Exit(0)
+			}
+			script.ScriptLines[index] = line
+		}
+	}
+
+	allErrors := make([]error, 0)
+	for step, line := range script.ScriptLines {
+		fmt.Printf("\n-----\nStep %d -- %s\n", step, line.Name)
 		vals, errs := runLine(line, script.ScriptValues)
 		if len(errs) == 0 {
 			for k, v := range vals {
 				script.ScriptValues[k] = v
 			}
 		} else {
-			for _, err := range errs {
-				fmt.Println(err)
-			}
+			allErrors = append(allErrors, errs...)
 		}
 	}
-	fmt.Printf("-----\n")
+	if len(allErrors) != 0 {
+		fmt.Printf("-----\n\n")
+		for _, err := range allErrors {
+			fmt.Println(err.Error())
+		}
+	} else {
+		fmt.Printf("\n-----\n\nNo errors were detected during this test run.\n")
+	}
+	fmt.Printf("\n-----\n")
 }
 
 func runLine(inLine ScriptLine, values map[string]string) (map[string]string, []error) {
@@ -106,14 +133,14 @@ func runLine(inLine ScriptLine, values map[string]string) (map[string]string, []
 		}
 	}
 
-	err = checkExpectations(line.Expectations, statusCode)
+	err = checkExpectations(line.Expectations, scriptValues, statusCode)
 	if err == nil {
 		fmt.Printf("PASS - Expectations all within normal parameters.\n")
 	} else {
 		errs = append(errs, err)
 	}
 
-	performActions(line.Actions, scriptValues)
+	performActions(line.Actions, scriptValues, respBoby)
 	return scriptValues, errs
 }
 
@@ -173,7 +200,7 @@ func makeHttpRequest(method, serviceUrl string, headers map[string]string, reqBo
 	return resp.StatusCode, string(body), nil
 }
 
-func checkExpectations(expectations []Expectation, statusCode int) error {
+func checkExpectations(expectations []Expectation, scriptValues map[string]string, statusCode int) error {
 	for _, expectation := range expectations {
 		switch expectation.Type {
 		case "status":
@@ -189,18 +216,32 @@ func checkExpectations(expectations []Expectation, statusCode int) error {
 				}
 				return errors.New(errStr)
 			}
+		case "string_equals":
+			expected := expectation.Arguments[0]
+			actual := scriptValues[expectation.Arguments[1]]
+			if expected != actual {
+				errStr := fmt.Sprintf("Expected %s to be equalt to %s but it's clearly not!!!", expected, actual)
+				if expectation.Fatal {
+					fmt.Printf("FATAL: %s\n-----\n", errStr)
+					os.Exit(0)
+				}
+				return errors.New(errStr)
+			}
 		}
 	}
 	return nil
 }
 
-func performActions(actions []Action, scriptValues map[string]string) {
+func performActions(actions []Action, scriptValues map[string]string, response string) {
 	for _, action := range actions {
 		switch action.Type {
 		case "print":
 			for _, argument := range action.Arguments {
 				fmt.Printf("%s = %s\n", argument, scriptValues[argument])
 			}
+		case "print_response":
+			fmt.Println("Response:")
+			fmt.Println(response)
 		}
 	}
 }

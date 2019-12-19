@@ -6,7 +6,13 @@ vars:
   Currency: USD
   Language: en-US
   UserEmail: testify@mailinator.com
-actions:
+  ShippingParams: country=US&region=PA
+  CreditCardNumber: 341111597242000
+  CreditCardYear: 2022
+  CreditCardMonth: 12
+imports:
+  PostToCarts: test_scripts/post_to_carts.yaml
+steps:
   -
     name: HealthCheck
     method: GET
@@ -14,7 +20,7 @@ actions:
     url_pattern: "health"
     resp_values:
       json:
-        AppName: appName
+        GitBranch: gitBranch
     expectations:
       -
         type: status
@@ -22,10 +28,10 @@ actions:
           - 200
         fatal: true
       -
-        type: compare_string
+        type: string_equals
         arguments:
-          - token-svc
-          - "{{.AppName}}"
+          - master
+          - GitBranch
         fatal: false
   -
     name: GetAToken
@@ -109,29 +115,7 @@ actions:
         arguments:
           - Cart
   -
-    name: PostToCarts
-    method: POST
-    url: "{{.CheckoutUrl}}"
-    headers:
-      Authorization: "Bearer {{.Token}}"
-      X-Urbn-Channel: "{{.Channel}}"
-      X-Urbn-Currency: "{{.Currency}}"
-      X-Urbn-language: "{{.Language}}"
-    url_pattern: "{{.Site}}/carts"
-    resp_values:
-      json:
-        ItemId: id
-        Cart: cart
-        BucketId: cart.shipBuckets.0.id
-    expectations:
-      - type: status
-        arguments:
-          - 201
-        fatal: true
-    actions:
-      - type: print
-        arguments:
-          - Cart
+    import: PostToCarts
   -
     name: Add Anon user to Cart
     method: POST
@@ -186,4 +170,107 @@ actions:
       - type: print
         arguments:
           - AddressId
+  -
+    import: PostToCarts
+  -
+    name: GetAvailableShipMethods
+    method: GET
+    url: "{{.CheckoutUrl}}"
+    headers:
+      Authorization: "Bearer {{.Token}}"
+      X-Urbn-Channel: "{{.Channel}}"
+      X-Urbn-Currency: "{{.Currency}}"
+      X-Urbn-language: "{{.Language}}"
+    url_pattern: "{{.Site}}/carts/shipping-methods?{{.ShippingParams}}"
+    resp_values:
+      json:
+        ShipMethodId: "{{.BucketId}}.0.id"
+    expectations:
+      - type: status
+        arguments:
+          - 200
+        fatal: true
+    actions:
+      - type: print
+        arguments:
+          - ShipMethodId
+  -
+    name: AddShipMethod
+    method: POST
+    url: "{{.CheckoutUrl}}"
+    headers:
+      Authorization: "Bearer {{.Token}}"
+      X-Urbn-Channel: "{{.Channel}}"
+      X-Urbn-Currency: "{{.Currency}}"
+      X-Urbn-language: "{{.Language}}"
+    url_pattern: "{{.Site}}/carts/buckets/{{.BucketId}}/shipping-methods"
+    body: |+
+      {
+        "shippingMethod": "{{.ShipMethodId}}"
+      }
+    expectations:
+      - type: status
+        arguments:
+          - 201
+        fatal: true
+  -
+    import: PostToCarts
+  -
+    name: AddCrefitCardPayment
+    method: POST
+    url: "{{.CheckoutUrl}}"
+    headers:
+      Authorization: "Bearer {{.Token}}"
+      X-Urbn-Channel: "{{.Channel}}"
+      X-Urbn-Currency: "{{.Currency}}"
+      X-Urbn-language: "{{.Language}}"
+    url_pattern: "{{.Site}}/carts/payments"
+    body: |+
+      {
+        "paymentType": "CREDIT_CARD",
+        "creditCard": {
+          "expirationMonth": "{{.CreditCardMonth}}",
+          "cardType": "AMEX",
+          "expirationYear": "{{.CreditCardYear}}",
+          "cardNumber": "{{.CreditCardNumber}}",
+          "addressId": "{{.AddressId}}"
+        }
+      }
+    resp_values:
+      json:
+        PaymentId: id
+    expectations:
+      - type: status
+        arguments:
+          - 201
+        fatal: true
+    actions:
+      - type: print
+        arguments:
+          - PaymentId
+  -
+    import: PostToCarts
+  -
+    name: SubmitOrder
+    method: POST
+    url: "{{.CheckoutUrl}}"
+    headers:
+      Authorization: "Bearer {{.Token}}"
+      X-Urbn-Channel: "{{.Channel}}"
+      X-Urbn-Currency: "{{.Currency}}"
+      X-Urbn-language: "{{.Language}}"
+    url_pattern: "{{.Site}}/orders"
+    body: |+
+      {
+        "iovationBlackBox": "XkBlHA1FfwWpaHcKDFrapYBo8JGxC5Z7J1hNC57nL7Q=",
+        "customerIpAddress": "10.27.10.22",
+        "verificationCode": "1154"
+      }
+    expectations:
+      - type: status
+        arguments:
+          - 201
+        fatal: true
+    actions:
+      - type: print_response
 
