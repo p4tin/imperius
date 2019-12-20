@@ -67,16 +67,16 @@ steps:
     url_pattern: "{{.Site}}/carts/items"
     body: |+
           {
-               "cartType": "TRANSACTIONAL",
-               "multiLine": false,
-               "quantity": 1,
-               "poolId": "GB_DIRECT",
-               "skuId": "45921137",
-               "productId": "FP-45920915-000",
-               "analytics": {
-                   "navigationId": "dyrectray-TopProducts"
-               }
-           }
+             "cartType":"TRANSACTIONAL",
+             "multiLine":false,
+             "quantity":1,
+             "poolId":"US_DIRECT",
+             "skuId":"40118507",
+             "productId":"FP-40118507-000",
+             "analytics":{
+                "navigationId":"beauty-wellness,fragrances"
+             }
+          }
     resp_values:
       json:
         ItemId: id
@@ -194,6 +194,7 @@ steps:
       - type: print
         arguments:
           - ShipMethodId
+      - type: print_response
   -
     name: AddShipMethod
     method: POST
