@@ -6,6 +6,21 @@ Here the Imperius allows you to control APIs at will from the command line using
 
 Installation:
 
-- Will be installed from source or brew.
+- Mac OSX
+  ```
+  brew tap p4tin/tap
+  brew install imperius
+  ```
 
+- Others
+  * download the tar.gs for your target system
+  * extract the archive
+  * copy the executable in your command path somewhere
+  
 How to use it:
+
+- just all it from the command line:  
+    `imperius [yaml test file]`
+
+Structure of the YAML test files
+
