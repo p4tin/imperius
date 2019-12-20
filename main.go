@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -51,7 +52,16 @@ type Script struct {
 	ImportFiles  map[string]string `yaml:"imports"`
 }
 
+var version string
+
 func main() {
+	boolPtr := flag.Bool("v", false, "version")
+	flag.Parse()
+
+	if *boolPtr {
+		fmt.Printf("version %s\n", version)
+		os.Exit(0)
+	}
 	if len(os.Args) != 2 {
 		fmt.Println("No script file given or unexpected arguments supplied  --  imperius [script_filename]")
 		os.Exit(0)

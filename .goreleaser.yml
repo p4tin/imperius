@@ -16,6 +16,8 @@ builds:
   -
     main: ./main.go
     binary: imperius
+    ldflags:
+      - -s -w -X main.version={{.Tag}}
     env:
       - CGO_ENABLED=0
     goos:
