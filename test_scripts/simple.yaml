@@ -1,0 +1,25 @@
+test_name: "simple test"
+vars:
+  Url: https://httpbin.org
+imports:
+  PostData: test_scripts/post_data.yaml
+stages:
+  -
+    import: PostData
+  - name: httpbin.org
+    method: GET
+    before: |+
+      environment["X-Test-Header"] = "TestHeader";
+      console.log(JSON.stringify(environment, null, 4));
+    url: "{{.Url}}"
+    url_pattern: "get"
+    resp_values:
+      json:
+        Origin: origin
+    expectations:
+      - type: status
+        arguments:
+          - 200
+        fatal: true
+    after: |+
+      console.log(JSON.stringify(environment, null, 4));

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/robertkrimen/otto"
 	"github.com/tidwall/gjson"
 	"gopkg.in/yaml.v2"
 )
@@ -33,8 +34,9 @@ type Action struct {
 	Arguments []string `yaml:"arguments"`
 }
 
-type ScriptLine struct {
+type Stage struct {
 	Import       string                       `yaml:"import"`
+	Before       string                       `yaml:"before"`
 	Name         string                       `yaml:"name"`
 	Url          string                       `yaml:"url"`
 	Headers      map[string]string            `yaml:"headers"`
@@ -44,15 +46,18 @@ type ScriptLine struct {
 	RespValues   map[string]map[string]string `yaml:"resp_values"`
 	Expectations []Expectation                `yaml:"expectations"`
 	Actions      []Action                     `yaml:"actions"`
+	After        string                       `yaml:"after"`
 }
 
-type Script struct {
-	ScriptValues map[string]string `yaml:"vars"`
-	ScriptLines  []ScriptLine      `yaml:"steps"`
-	ImportFiles  map[string]string `yaml:"imports"`
+type Test struct {
+	Name        string            `yaml:"test_name"`
+	Variables   map[string]string `yaml:"vars"`
+	Stages      []Stage           `yaml:"stages"`
+	ImportSteps map[string]string `yaml:"imports"`
 }
 
 var version string
+var interpreter = otto.New()
 
 func main() {
 	boolPtr := flag.Bool("v", false, "version")
@@ -66,51 +71,50 @@ func main() {
 		fmt.Println("No script file given or unexpected arguments supplied  --  imperius [script_filename]")
 		os.Exit(0)
 	}
-	scriptFilename := os.Args[1]
 
-	scriptFile, err := ioutil.ReadFile(scriptFilename)
+	testFilename := os.Args[1]
+
+	testFile, err := ioutil.ReadFile(testFilename)
 	if err != nil {
 		fmt.Printf("ioutil.Readfile err   #%v ", err)
 		os.Exit(0)
 	}
 
-	var script Script
-	err = yaml.Unmarshal(scriptFile, &script)
+	var test Test
+	err = yaml.Unmarshal(testFile, &test)
 	if err != nil {
 		fmt.Printf("Unmarshal: %v", err)
 		os.Exit(0)
 	}
 
 	//resolve imports
-	for index, line := range script.ScriptLines {
-		if line.Import != "" {
-			partial, err := ioutil.ReadFile(script.ImportFiles[line.Import])
+	for index, step := range test.Stages {
+		if step.Import != "" {
+			partial, err := ioutil.ReadFile(test.ImportSteps[step.Import])
 			if err != nil {
 				fmt.Printf("ioutil.Readfile err   #%v ", err)
 				os.Exit(0)
 			}
-			var line ScriptLine
+			var line Stage
 			err = yaml.Unmarshal(partial, &line)
 			if err != nil {
 				fmt.Printf("Unmarshal: %v", err)
 				os.Exit(0)
 			}
-			script.ScriptLines[index] = line
+			test.Stages[index] = line
 		}
 	}
 
 	allErrors := make([]error, 0)
-	for step, line := range script.ScriptLines {
-		fmt.Printf("\n-----\nStep %d -- %s\n", step, line.Name)
-		vals, errs := runLine(line, script.ScriptValues)
-		if len(errs) == 0 {
-			for k, v := range vals {
-				script.ScriptValues[k] = v
-			}
-		} else {
+	fmt.Printf("Running Test: %s\n", test.Name)
+	for index, step := range test.Stages {
+		fmt.Printf("\n-----\nStep %d -- %s\n", index, step.Name)
+		errs := performStep(step, test.Variables)
+		if len(errs) > 0 {
 			allErrors = append(allErrors, errs...)
 		}
 	}
+
 	if len(allErrors) != 0 {
 		fmt.Printf("-----\n\n")
 		for _, err := range allErrors {
@@ -122,11 +126,12 @@ func main() {
 	fmt.Printf("\n-----\n")
 }
 
-func runLine(inLine ScriptLine, values map[string]string) (map[string]string, []error) {
-	line := applyTemplate(&inLine, values)
-	urlPattern := line.URLPattern
-	body := &line.Body
-	statusCode, respBoby, err := makeHttpRequest(line.Method, fmt.Sprintf("%s/%s", line.Url, urlPattern), line.Headers, body)
+func performStep(currentStep Stage, testVariables map[string]string) []error {
+	runScript(currentStep.Before, currentStep, testVariables)
+	hydratedStep := applyTemplate(&currentStep, testVariables)
+	urlPattern := hydratedStep.URLPattern
+	body := &hydratedStep.Body
+	statusCode, respBody, err := makeHttpRequest(hydratedStep.Method, fmt.Sprintf("%s/%s", hydratedStep.Url, urlPattern), hydratedStep.Headers, body)
 
 	errs := make([]error, 0)
 	if err != nil {
@@ -136,25 +141,36 @@ func runLine(inLine ScriptLine, values map[string]string) (map[string]string, []
 		errs = append(errs, errors.New(fmt.Sprintf("http error: %d", statusCode)))
 	}
 
-	scriptValues := make(map[string]string)
-	if values, ok := line.RespValues["json"]; ok {
+	if values, ok := hydratedStep.RespValues["json"]; ok {
 		for name, jsonPosition := range values {
-			scriptValues[name] = gjson.Get(respBoby, jsonPosition).String()
+			testVariables[name] = gjson.Get(respBody, jsonPosition).String()
 		}
 	}
 
-	err = checkExpectations(line.Expectations, scriptValues, statusCode)
+	err = checkExpectations(hydratedStep.Expectations, testVariables, statusCode)
 	if err == nil {
 		fmt.Printf("PASS - Expectations all within normal parameters.\n")
 	} else {
 		errs = append(errs, err)
 	}
 
-	performActions(line.Actions, scriptValues, respBoby)
-	return scriptValues, errs
+	performActions(hydratedStep.Actions, testVariables, respBody)
+	runScript(currentStep.After, currentStep, testVariables)
+	return errs
 }
 
-func applyTemplate(lineInfo *ScriptLine, data map[string]string) *ScriptLine {
+func runScript(script string, step Stage, testVariables map[string]string) {
+	if script != "" {
+		interpreter.Set("script", step)
+		interpreter.Set("environment", testVariables)
+		_, err := interpreter.Run(script)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func applyTemplate(lineInfo *Stage, data map[string]string) *Stage {
 	bites, err := json.Marshal(lineInfo)
 	if err != nil {
 		panic(err)
@@ -170,7 +186,7 @@ func applyTemplate(lineInfo *ScriptLine, data map[string]string) *ScriptLine {
 		panic(err)
 	}
 
-	var output ScriptLine
+	var output Stage
 	err = json.Unmarshal(tpl.Bytes(), &output)
 	if err != nil {
 		panic(err)
