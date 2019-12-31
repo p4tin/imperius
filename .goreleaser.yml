@@ -38,14 +38,15 @@ builds:
         goarch: arm
         goarm: 7
 
-#dockers:
-#  -
-#    image_templates:
-#      - "pafortin/goaws"
-#      - "docker.io/pafortin/goaws:{{ .Tag }}"
-#      - "docker.io/pafortin/goaws:latest"
-#    extra_files:
-#      - app/conf/goaws.yaml
+nfpms:
+  -
+    vendor: C&P Software
+    homepage: https://github.com/p4tin/imperius
+    maintainer: Paul Fortin <paul@cp-soft.com>
+    description: Easy to use command line API Tester
+    formats:
+      - deb
+      - rpm
 
 archives:
   - replacements:
