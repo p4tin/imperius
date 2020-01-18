@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -17,11 +18,6 @@ import (
 	"github.com/tidwall/gjson"
 	"gopkg.in/yaml.v2"
 )
-
-type TestRun struct {
-	Name string `yaml:"name"`
-	Desc string `yaml:"desc"`
-}
 
 type Expectation struct {
 	Type      string   `yaml:"type"`
@@ -34,23 +30,35 @@ type Action struct {
 	Arguments []string `yaml:"arguments"`
 }
 
-type Stage struct {
-	Import       string                       `yaml:"import"`
-	Before       string                       `yaml:"before"`
-	Name         string                       `yaml:"name"`
-	Url          string                       `yaml:"url"`
-	Headers      map[string]string            `yaml:"headers"`
-	Method       string                       `yaml:"method"`
-	URLPattern   string                       `yaml:"url_pattern"`
-	Body         string                       `yaml:"body"`
+type Request struct {
+	Url        string                 `yaml:"url"`
+	Headers    map[string]string      `yaml:"headers"`
+	Method     string                 `yaml:"method"`
+	URLPattern string                 `yaml:"url_pattern"`
+	Json       map[string]interface{} `yaml:"json"`
+	Data       map[string]string      `yaml:"data"`
+}
+
+type Response struct {
+	StatusCode   int                          `yaml:"status_code"`
 	RespValues   map[string]map[string]string `yaml:"resp_values"`
 	Expectations []Expectation                `yaml:"expectations"`
 	Actions      []Action                     `yaml:"actions"`
 	After        string                       `yaml:"after"`
 }
 
+type Stage struct {
+	Import   string   `yaml:"import"`
+	Before   string   `yaml:"before"`
+	Name     string   `yaml:"name"`
+	Request  Request  `yaml:"request"`
+	Response Response `yaml:"response"`
+	After    string   `yaml:"after"`
+}
+
 type Test struct {
 	Name        string            `yaml:"test_name"`
+	Description string            `yaml:"description"`
 	Variables   map[string]string `yaml:"vars"`
 	Stages      []Stage           `yaml:"stages"`
 	ImportSteps map[string]string `yaml:"imports"`
@@ -115,23 +123,43 @@ func main() {
 		}
 	}
 
-	if len(allErrors) != 0 {
-		fmt.Printf("-----\n\n")
-		for _, err := range allErrors {
-			fmt.Println(err.Error())
-		}
-	} else {
-		fmt.Printf("\n-----\n\nNo errors were detected during this test run.\n")
-	}
+	//if len(allErrors) != 0 {
+	//	fmt.Printf("-----\n\n")
+	//	for _, err := range allErrors {
+	//		fmt.Println(err.Error())
+	//	}
+	//} else {
+	//	fmt.Printf("\n-----\n\nNo errors were detected during this test run.\n")
+	//}
 	fmt.Printf("\n-----\n")
+}
+
+func getRequestBody(Json map[string]interface{}, Data map[string]string) string {
+	if len(Json) > 0 {
+		body, err := json.Marshal(Json)
+		if err != nil {
+			return ""
+		}
+		bodyStr := string(body)
+		return bodyStr
+	} else if len(Data) > 0 {
+		mapData := Data
+		form := url.Values{}
+		for k, v := range mapData {
+			form.Add(k, v)
+		}
+		return form.Encode()
+	}
+	return ""
 }
 
 func performStep(currentStep Stage, testVariables map[string]string) []error {
 	runScript(currentStep.Before, currentStep, testVariables)
 	hydratedStep := applyTemplate(&currentStep, testVariables)
-	urlPattern := hydratedStep.URLPattern
-	body := &hydratedStep.Body
-	statusCode, respBody, err := makeHttpRequest(hydratedStep.Method, fmt.Sprintf("%s/%s", hydratedStep.Url, urlPattern), hydratedStep.Headers, body)
+	urlPattern := hydratedStep.Request.URLPattern
+	body := getRequestBody(hydratedStep.Request.Json, hydratedStep.Request.Data)
+	statusCode, respBody, err := makeHttpRequest(hydratedStep.Request.Method,
+		fmt.Sprintf("%s/%s", hydratedStep.Request.Url, urlPattern), hydratedStep.Request.Headers, body)
 
 	errs := make([]error, 0)
 	if err != nil {
@@ -141,20 +169,20 @@ func performStep(currentStep Stage, testVariables map[string]string) []error {
 		errs = append(errs, errors.New(fmt.Sprintf("http error: %d", statusCode)))
 	}
 
-	if values, ok := hydratedStep.RespValues["json"]; ok {
+	if values, ok := hydratedStep.Response.RespValues["json"]; ok {
 		for name, jsonPosition := range values {
 			testVariables[name] = gjson.Get(respBody, jsonPosition).String()
 		}
 	}
 
-	err = checkExpectations(hydratedStep.Expectations, testVariables, statusCode)
+	err = checkExpectations(hydratedStep.Response.Expectations, testVariables, statusCode)
 	if err == nil {
 		fmt.Printf("PASS - Expectations all within normal parameters.\n")
 	} else {
 		errs = append(errs, err)
 	}
 
-	performActions(hydratedStep.Actions, testVariables, respBody)
+	performActions(hydratedStep.Response.Actions, testVariables, respBody)
 	runScript(currentStep.After, currentStep, testVariables)
 	return errs
 }
@@ -195,16 +223,37 @@ func applyTemplate(lineInfo *Stage, data map[string]string) *Stage {
 	return &output
 }
 
-func makeHttpRequest(method, serviceUrl string, headers map[string]string, reqBody *string) (int, string, error) {
+func replaceVars(initial string, replacements map[string]string) string {
+	for {
+		start := strings.Index(initial, "{")
+		end := strings.Index(initial, "}")
+
+		if start == -1 || end == -1 || start > end {
+			break
+		}
+		key := initial[start+1 : end]
+		if strings.Contains(key, ":") {
+			endKey := strings.Index(key, ":")
+			key = key[:endKey]
+		}
+		replaceable := initial[start : end+1]
+		initial = strings.Replace(initial, replaceable, replacements[key], -1)
+	}
+	return initial
+}
+
+func makeHttpRequest(method, serviceUrl string, headers map[string]string, reqBody string) (int, string, error) {
 	var req *http.Request
 	var err error
 
 	var requestBody *strings.Reader = nil
-	if reqBody != nil {
-		requestBody = strings.NewReader(*reqBody)
+	if reqBody != "" {
+		requestBody = strings.NewReader(reqBody)
+		req, err = http.NewRequest(method, serviceUrl, requestBody)
+	} else {
+		req, err = http.NewRequest(method, serviceUrl, nil)
 	}
 
-	req, err = http.NewRequest(method, serviceUrl, requestBody)
 	if err != nil {
 		return 500, "", err
 	}

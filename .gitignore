@@ -2,3 +2,6 @@
 imperius
 dist/
 a15-tests/
+tmp/
+test-server/
+

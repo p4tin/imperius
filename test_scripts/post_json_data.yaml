@@ -1,0 +1,29 @@
+name: Post Json Data
+request:
+  method: POST
+  url: "{{.Url}}"
+  url_pattern: "post"
+  headers:
+    X-Tracer_Id: "{{.Tracer}}"
+    Content-Type: "application/json"
+  json:
+    quantity: 1
+    productId: "100001"
+response:
+  status_code: 200
+  resp_values:
+    json:
+      ProductId: json.productId  # Get a response value from a json and put it in the environment
+                                 # You can use indexes into arrays like - json.products.1.productId
+  expectations:
+    - type: status
+      arguments:
+        - 200
+      fatal: true
+  actions:
+    - type: print
+      arguments:
+        - ProductId
+after: |+
+  if (environment["ProductId"] != "100001")
+    console.log("Fail");

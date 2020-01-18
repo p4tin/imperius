@@ -1,25 +1,34 @@
 test_name: "simple test"
 vars:
   Url: https://httpbin.org
+  Tracer: abc1234
 imports:
-  PostData: test_scripts/post_data.yaml
+  PostJsonData: test_scripts/post_json_data.yaml
+  PostFormData: test_scripts/post_form_data.yaml
 stages:
   -
-    import: PostData
+    import: PostJsonData
+  -
+    import: PostFormData
   - name: httpbin.org
-    method: GET
     before: |+
       environment["X-Test-Header"] = "TestHeader";
       console.log(JSON.stringify(environment, null, 4));
-    url: "{{.Url}}"
-    url_pattern: "get"
-    resp_values:
-      json:
-        Origin: origin
-    expectations:
-      - type: status
-        arguments:
-          - 200
-        fatal: true
+    request:
+      method: GET
+      url: "{{.Url}}"
+      url_pattern: "get"
+      headers:
+        X-Tracer_Id: "{{.Tracer}}"
+    response:
+      status_code: 200
+      resp_values:
+        json:
+          Origin: origin
+      expectations:
+        - type: status
+          arguments:
+            - 200
+          fatal: true
     after: |+
       console.log(JSON.stringify(environment, null, 4));
