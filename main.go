@@ -320,13 +320,27 @@ func checkExpectations(expectations []Expectation, scriptValues map[string]strin
 			expected := expectation.Arguments[0]
 			actual := scriptValues[expectation.Arguments[1]]
 			if expected != actual {
-				errStr := fmt.Sprintf("Expected %s to be equalt to %s but it's clearly not!!!", expected, actual)
+				errStr := fmt.Sprintf("Expected %s to be equal to %s but it's clearly not!!!", expected, actual)
 				if expectation.Fatal {
 					fmt.Printf("FATAL: %s\n-----\n", errStr)
 					os.Exit(0)
 				}
 				return errors.New(errStr)
 			}
+		case "string_contains":
+			expected := expectation.Arguments[0]
+			searchable_string := scriptValues[expectation.Arguments[1]]
+			if !strings.Contains(searchable_string, expected) {
+				errStr := fmt.Sprintf("Expected - %s\n to contain '%s' but it clearly does not!!!", searchable_string, expected)
+				// NOTE: this will raise on fatal
+				//  - but it won't raise if fatal is false, we get "PASS - Expectations all within normal parameters." - intended??? (Looks like other failures share this behavior).
+				if expectation.Fatal {
+					fmt.Printf("FATAL: %s\n-----\n", errStr)
+					os.Exit(0)
+				}
+				return errors.New(errStr)
+			}
+		
 		}
 	}
 	return nil
