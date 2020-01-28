@@ -16,7 +16,8 @@ We have provide a `deb` and `rpm` package that can be installed just like any ot
 I apologize but I have no easy installation for windows users.  Simply download the executable `*.tar.gz` for windows, unpack it and place the imperius.exe in your path somewhere and you are all set.
 
 ### Docker
-As of now there is no docker imperius but if someone wanted tackle the Dockerfile and the goreleaser changes needed it would be greatly appreciated.
+
+Currently there is no docker support but we plan on creating a docker file that can run all the test files in a specified directory, all includes would have to be placed in a sub-directory.  More to come...  (if someone wanted tackle the Dockerfile and the goreleaser changes needed it would be greatly appreciated.)
 
 ## Usage
 
@@ -58,7 +59,8 @@ There are 4 main sections to the YAML file:
         Tracer: abc1234
     ```
 - Imports
-    For the moment import file can only contain 1 stage of the entire test.  That stage can be used in the main file as is several times.  This was done so that you could re-use the same step several times within a test without having to completely re-define it over and over again.
+    For the moment import file can only contain 1 stage of the entire test.  That stage can be used in the main file, as is, several times.  This was done so that you could re-use the same step several times within a test without having to completely re-define it over and over again.
+    Future Enhancement: A way to create a file full of `vars` to be used in the main test file
 
     Example:
     ```
@@ -67,8 +69,9 @@ There are 4 main sections to the YAML file:
         PostFormData: test_scripts/post_form_data.yaml
     ```
 - Stages
+    Each stage is a specific call to an API endpoint like `GetAToken`, `AddToBasket`, etc,...  In each stage the yaml has 3 sections: `general`, `request` and `response`
 
-
+    **General**: This section contains the stage's `name` and the `before` and `after` scripts.  `before` and `after` are written in plain old javascript and they both receive the `environment` which contains all the current variables that exist.
 
 ## test-server example w/yaml file
 Test server code:
