@@ -48,15 +48,16 @@ There are 4 main sections to the YAML file:
         - description: for informational purposes only
 
 - Vars  
-    In this section you will put variables that will be used in the test stages to replace the variable placeholders.  This allow for repetitive things to be placed at the top of the script (i.e.: URL, Tokens, etc,...  This is simply a key-value list.
-
-    **Future Improvement**  (import a file with pre-defined vars like deployment environment variables (i.e.: dev, staging, prod) That could be switched based on the required environment to be tested at the time.   (kinda like postman environments)
+    In this section you will put variables that will be used in the test stages to replace the variable placeholders.  This allow for repetitive things to be placed at the top of the script (i.e.: URL, Tokens, etc,...  This is simply a key-value list.  
+    If the Key in the vars is `Import`, then data for that key is interpreted as a filename and the vars in that file are loaded and 
+    added to the current environment.  Keys declared in the main test file have priority over the ones in the import file.
 
     Example:
     ```
     vars:
         Url: https://httpbin.org
         Tracer: abc1234
+        Import: ./test-scripts/vars.yaml
     ```
 - Imports
     For the moment import file can only contain 1 stage of the entire test.  That stage can be used in the main file, as is, several times.  This was done so that you could re-use the same step several times within a test without having to completely re-define it over and over again.
@@ -73,7 +74,9 @@ There are 4 main sections to the YAML file:
 
     **General**: This section contains the stage's `name` and the `before` and `after` scripts.  `before` and `after` are written in plain old javascript and they both receive the `environment` which contains all the current variables that exist.
 
-## test-server example w/yaml file
+---
+
+## test-server example with imperius yaml script file
 Test server code:
 
     package main
@@ -188,6 +191,8 @@ Test server code:
     }
 
     ```
+---
+
 Yaml file to test this server:
 
     test_name: "tavern test server tests"

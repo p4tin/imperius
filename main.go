@@ -56,6 +56,10 @@ type Stage struct {
 	After    string   `yaml:"after"`
 }
 
+type ImportVars struct {
+	Vars map[string]string `yaml:"vars"`
+}
+
 type Test struct {
 	Name        string            `yaml:"test_name"`
 	Description string            `yaml:"description"`
@@ -95,7 +99,28 @@ func main() {
 		os.Exit(0)
 	}
 
-	//resolve imports
+	// Resolve vars imports
+	for key, filename := range test.Variables {
+		if key == "Import" {
+			file, err := ioutil.ReadFile(filename)
+			if err != nil {
+				fmt.Printf("Vars Import file - ioutil.Readfile err   #%v ", err)
+				os.Exit(0)
+			}
+			var importVars ImportVars
+			err = yaml.Unmarshal(file, &importVars)
+			if err != nil {
+				fmt.Printf("Unmarshal: %v", err)
+				os.Exit(0)
+			}
+			for key, val := range importVars.Vars {
+				if _, ok := test.Variables[key]; !ok {
+					test.Variables[key] = val
+				}
+			}
+		}
+	}
+	// Resolve stage imports
 	for index, step := range test.Stages {
 		if step.Import != "" {
 			partial, err := ioutil.ReadFile(test.ImportSteps[step.Import])
