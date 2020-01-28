@@ -1,0 +1,4 @@
+vars:
+  test-key-1: 125
+  test-key-2: ABC
+  Url: https://google.com  # This will NOT override what is in simple.yaml
