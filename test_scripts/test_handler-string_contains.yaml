@@ -1,0 +1,31 @@
+test_name: "String Handler"
+vars:
+  Url: https://httpbin.org
+  Tracer: abc1234
+imports:
+  PostStringContains: test_scripts/post_string_contains.yaml
+stages:
+  -
+    import: PostStringContains
+  - name: httpbin.org
+    before: |+
+      environment["X-Test-Header"] = "TestHeader";
+      console.log(JSON.stringify(environment, null, 4));
+    request:
+      method: GET
+      url: "{{.Url}}"
+      url_pattern: "get"
+      headers:
+        X-Tracer_Id: "{{.Tracer}}"
+    response:
+      status_code: 200
+      resp_values:
+        json:
+          Origin: origin
+      expectations:
+        - type: status
+          arguments:
+            - 200
+          fatal: true
+    after: |+
+      console.log(JSON.stringify(environment, null, 4));
