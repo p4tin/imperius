@@ -17,19 +17,9 @@ response:
       ProductId: json.productId  # Get a response value from a json and put it in the environment
                                  # You can use indexes into arrays like - json.products.1.productId
   expectations:
-    - type: status
-      arguments:
-        - 200
-      fatal: true
     - type: string_contains
       arguments:
-        - "productIdd"
+        - "productId"
         - "Body"
-      fatal: false
-  actions:
-    - type: print
-      arguments:
-        - ProductId
-after: |+
-  if (environment["ProductId"] != "100001")
-    console.log("Fail");
+
+
