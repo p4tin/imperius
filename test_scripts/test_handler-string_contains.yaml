@@ -3,7 +3,7 @@ vars:
   Url: https://httpbin.org
   Tracer: abc1234
 imports:
-  PostStringContains: test_scripts/post_string_contains.yaml
+  PostStringContains: test_scripts/includes/post_string_contains.yaml
 stages:
   -
     import: PostStringContains
@@ -26,6 +26,5 @@ stages:
         - type: status
           arguments:
             - 200
-          fatal: true
     after: |+
       console.log(JSON.stringify(environment, null, 4));

@@ -48,6 +48,15 @@ nfpms:
       - deb
       - rpm
 
+dockers:
+  -
+    image_templates:
+      - "pafortin/imperius"
+      - "docker.io/pafortin/imperius:{{ .Tag }}"
+      - "docker.io/pafortin/imperius:latest"
+    extra_files:
+      - test-scripts
+
 archives:
   - replacements:
       darwin: Darwin

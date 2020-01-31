@@ -15,11 +15,6 @@ response:
     json:
       ProductId: json.productId  # Get a response value from a json and put it in the environment
                                  # You can use indexes into arrays like - json.products.1.productId
-  expectations:
-    - type: status
-      arguments:
-        - 200
-      fatal: true
   actions:
     - type: print
       arguments:

@@ -1,0 +1,46 @@
+vars:
+  TokenUrl: https://fp-dev.urbn.com/api/token/v0
+  Site: fp-us
+  Channel: web
+  Currency: USD
+  Language: en-US
+stages:
+  -
+    name: HealthCheck
+    request:
+      method: GET
+      url: "{{.TokenUrl}}"
+      url_pattern: "health"
+    response:
+      status_code: 200
+      resp_values:
+        json:
+          GitBranch: gitBranch
+      expectations:
+        -
+          type: string_equals
+          arguments:
+            - master
+            - GitBranch
+      actions:
+        - type: print_response
+  -
+    name: GetAToken
+    request:
+      method: POST
+      url: "{{.TokenUrl}}"
+      headers:
+        X-Urbn-Channel: "{{.Channel}}"
+        X-Urbn-Currency: "{{.Currency}}"
+        X-Urbn-language: "{{.Language}}"
+      url_pattern: "{{.Site}}/auth"
+    response:
+      status_code: 200
+      resp_values:
+        json:
+          Token: authToken
+          ReAuthToken: reAuthToken
+      actions:
+        - type: print
+          arguments:
+            - Token

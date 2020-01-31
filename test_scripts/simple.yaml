@@ -2,10 +2,10 @@ test_name: "simple test"
 vars:
   Url: https://httpbin.org  # This will NOT be overwritten by vars.yaml
   Tracer: abc1234
-  Import: test_scripts/vars.yaml  # Import some vars from an external file - see test_scripts/vars.yaml for format
+  Import: test_scripts/includes/vars.yaml  # Import some vars from an external file - see test_scripts/vars.yaml for format
 imports:
-  PostJsonData: test_scripts/post_json_data.yaml
-  PostFormData: test_scripts/post_form_data.yaml
+  PostJsonData: test_scripts/includes/post_json_data.yaml
+  PostFormData: test_scripts/includes/post_form_data.yaml
 stages:
   -
     import: PostJsonData
@@ -30,6 +30,5 @@ stages:
         - type: status
           arguments:
             - 200
-          fatal: true
     after: |+
       console.log(JSON.stringify(environment, null, 4));

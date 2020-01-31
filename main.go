@@ -11,18 +11,17 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v2"
 
 	"github.com/robertkrimen/otto"
 	"github.com/tidwall/gjson"
-	"gopkg.in/yaml.v2"
 )
 
 type Expectation struct {
 	Type      string   `yaml:"type"`
 	Arguments []string `yaml:"arguments"`
-	Fatal     bool     `yaml:"fatal"`
 }
 
 type Action struct {
@@ -44,7 +43,6 @@ type Response struct {
 	RespValues   map[string]map[string]string `yaml:"resp_values"`
 	Expectations []Expectation                `yaml:"expectations"`
 	Actions      []Action                     `yaml:"actions"`
-	After        string                       `yaml:"after"`
 }
 
 type Stage struct {
@@ -79,13 +77,40 @@ func main() {
 		fmt.Printf("version %s\n", version)
 		os.Exit(0)
 	}
-	if len(os.Args) != 2 {
-		fmt.Println("No script file given or unexpected arguments supplied  --  imperius [script_filename]")
+	if len(os.Args) < 2 {
+		fmt.Println("No script file given or unexpected arguments supplied  --  imperius [dir_or_filename(s)]...")
 		os.Exit(0)
 	}
 
-	testFilename := os.Args[1]
+	for x := 1; x < len(os.Args); x++ {
 
+		testFilename := os.Args[x]
+		fi, err := os.Stat(testFilename)
+		if err != nil {
+			fmt.Printf("Error determining file type (Dir or Regular file) - %s", testFilename)
+			continue
+		}
+		switch mode := fi.Mode(); {
+		case mode.IsDir():
+			root := testFilename
+			files, err := ioutil.ReadDir(root)
+			if err != nil {
+				fmt.Printf("filepath.Walk error - %s", err.Error())
+				continue
+			}
+			for _, file := range files {
+				if !file.IsDir() && strings.HasSuffix(file.Name(), ".yaml") {
+					runTestFile(fmt.Sprintf("%s/%s", root, file.Name()))
+				}
+			}
+			continue
+		case mode.IsRegular():
+			runTestFile(testFilename)
+		}
+	}
+}
+
+func runTestFile(testFilename string) {
 	testFile, err := ioutil.ReadFile(testFilename)
 	if err != nil {
 		fmt.Printf("ioutil.Readfile err   #%v ", err)
@@ -148,14 +173,6 @@ func main() {
 		}
 	}
 
-	//if len(allErrors) != 0 {
-	//	fmt.Printf("-----\n\n")
-	//	for _, err := range allErrors {
-	//		fmt.Println(err.Error())
-	//	}
-	//} else {
-	//	fmt.Printf("\n-----\n\nNo errors were detected during this test run.\n")
-	//}
 	fmt.Printf("\n-----\n")
 }
 
@@ -200,7 +217,7 @@ func performStep(currentStep Stage, testVariables map[string]string) []error {
 		}
 	}
 
-	err = checkExpectations(hydratedStep.Response.Expectations, testVariables, statusCode)
+	err = checkResponse(hydratedStep.Response, testVariables, statusCode)
 	if err == nil {
 		fmt.Printf("PASS - Expectations all within normal parameters.\n")
 	} else {
@@ -300,47 +317,33 @@ func makeHttpRequest(method, serviceUrl string, headers map[string]string, reqBo
 	return resp.StatusCode, string(body), nil
 }
 
-func checkExpectations(expectations []Expectation, scriptValues map[string]string, statusCode int) error {
+func checkResponse(response Response, scriptValues map[string]string, statusCode int) error {
+	if statusCode != response.StatusCode {
+		errStr := fmt.Sprintf("status code expected %d was not what was returned %d", response.StatusCode, statusCode)
+		fmt.Printf("FATAL: %s\n-----\n", errStr)
+		os.Exit(0)
+	}
+
+	expectations := response.Expectations
 	for _, expectation := range expectations {
 		switch expectation.Type {
-		case "status":
-			expected, err := strconv.Atoi(expectation.Arguments[0])
-			if err != nil {
-				return err
-			}
-			if expected != statusCode {
-				errStr := fmt.Sprintf("status code expected %d was not what was returned %d", expected, statusCode)
-				if expectation.Fatal {
-					fmt.Printf("FATAL: %s\n-----\n", errStr)
-					os.Exit(0)
-				}
-				return errors.New(errStr)
-			}
 		case "string_equals":
 			expected := expectation.Arguments[0]
 			actual := scriptValues[expectation.Arguments[1]]
 			if expected != actual {
 				errStr := fmt.Sprintf("Expected %s to be equal to %s but it's clearly not!!!", expected, actual)
-				if expectation.Fatal {
-					fmt.Printf("FATAL: %s\n-----\n", errStr)
-					os.Exit(0)
-				}
-				return errors.New(errStr)
+				fmt.Printf("FATAL: %s\n-----\n", errStr)
+				os.Exit(0)
 			}
 		case "string_contains":
 			expected := expectation.Arguments[0]
-			searchable_string := scriptValues[expectation.Arguments[1]]
-			if !strings.Contains(searchable_string, expected) {
-				errStr := fmt.Sprintf("Expected - %s\n to contain '%s' but it clearly does not!!!", searchable_string, expected)
-				// NOTE: this will raise on fatal
-				//  - but it won't raise if fatal is false, we get "PASS - Expectations all within normal parameters." - intended??? (Looks like other failures share this behavior).
-				if expectation.Fatal {
-					fmt.Printf("FATAL: %s\n-----\n", errStr)
-					os.Exit(0)
-				}
-				return errors.New(errStr)
+			searchableString := scriptValues[expectation.Arguments[1]]
+			if !strings.Contains(searchableString, expected) {
+				errStr := fmt.Sprintf("Expected - %s\n to contain '%s' but it clearly does not!!!", searchableString, expected)
+				fmt.Printf("FATAL: %s\n-----\n", errStr)
+				os.Exit(0)
 			}
-		
+
 		}
 	}
 	return nil

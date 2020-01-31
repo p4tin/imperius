@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+  tests:
+    container_name: tests
+    image: pafortin/imperius
+    volumes:
+      - "./test_scripts:/imperius/test_scripts"
+    command: ["/imperius/imperius", "/imperius/test_scripts"]
+
