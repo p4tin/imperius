@@ -30,12 +30,11 @@ type Action struct {
 }
 
 type Request struct {
-	Url        string                 `yaml:"url"`
-	Headers    map[string]string      `yaml:"headers"`
-	Method     string                 `yaml:"method"`
-	URLPattern string                 `yaml:"url_pattern"`
-	Json       map[string]interface{} `yaml:"json"`
-	Data       map[string]string      `yaml:"data"`
+	Url        string                            `yaml:"url"`
+	Headers    map[string]string                 `yaml:"headers"`
+	Method     string                            `yaml:"method"`
+	URLPattern string                            `yaml:"url_pattern"`
+	Body       map[string]map[string]interface{} `yaml:"body"`
 }
 
 type Response struct {
@@ -176,22 +175,36 @@ func runTestFile(testFilename string) {
 	fmt.Printf("\n-----\n")
 }
 
-func getRequestBody(Json map[string]interface{}, Data map[string]string) string {
-	if len(Json) > 0 {
-		body, err := json.Marshal(Json)
+func getRequestBody(body map[string]map[string]interface{}) string {
+	if jsonBody, ok := body["json"]; ok {
+		msgBytes, err := json.Marshal(jsonBody)
 		if err != nil {
-			return ""
+			panic(err)
 		}
-		bodyStr := string(body)
-		return bodyStr
-	} else if len(Data) > 0 {
-		mapData := Data
+		return string(msgBytes)
+	} else {
+		mapData := body["data"]
 		form := url.Values{}
 		for k, v := range mapData {
-			form.Add(k, v)
+			form.Add(k, v.(string))
 		}
 		return form.Encode()
 	}
+	//if len(Json) > 0 {
+	//	body, err := json.Marshal(Json)
+	//	if err != nil {
+	//		return ""
+	//	}
+	//	bodyStr := string(body)
+	//	return bodyStr
+	//} else if len(Data) > 0 {
+	//	mapData := Data
+	//	form := url.Values{}
+	//	for k, v := range mapData {
+	//		form.Add(k, v)
+	//	}
+	//	return form.Encode()
+	//}
 	return ""
 }
 
@@ -199,7 +212,7 @@ func performStep(currentStep Stage, testVariables map[string]string) []error {
 	runScript(currentStep.Before, currentStep, testVariables)
 	hydratedStep := applyTemplate(&currentStep, testVariables)
 	urlPattern := hydratedStep.Request.URLPattern
-	body := getRequestBody(hydratedStep.Request.Json, hydratedStep.Request.Data)
+	body := getRequestBody(hydratedStep.Request.Body)
 	statusCode, respBody, err := makeHttpRequest(hydratedStep.Request.Method,
 		fmt.Sprintf("%s/%s", hydratedStep.Request.Url, urlPattern), hydratedStep.Request.Headers, body)
 

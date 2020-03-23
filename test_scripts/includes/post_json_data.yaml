@@ -6,9 +6,10 @@ request:
   headers:
     X-Tracer_Id: "{{.Tracer}}"
     Content-Type: "application/json"
-  json:
-    quantity: 1
-    productId: "100001"
+  body:
+    json:
+      quantity: 1
+      productId: "100001"
 response:
   status_code: 200
   resp_values:
@@ -21,4 +22,4 @@ response:
         - ProductId
 after: |+
   if (environment["ProductId"] != "100001")
-    console.log("Fail");
+    console.log("Fail")

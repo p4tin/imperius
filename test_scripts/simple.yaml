@@ -32,3 +32,14 @@ stages:
             - 200
     after: |+
       console.log(JSON.stringify(environment, null, 4));
+      function sleep(ms){
+           var start = new Date().getTime()
+           var end = start;
+           while(end < start + ms) {
+             end = new Date().getTime()
+          }
+        }
+
+        console.log("Waiting...")
+        sleep(5000)
+        console.log("Continuing...")

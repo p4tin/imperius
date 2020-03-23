@@ -5,9 +5,10 @@ request:
   url_pattern: "post"
   headers:
     Content-Type: "application/x-www-form-urlencoded"
-  data:
-    quantity: "1"
-    productId: "100001"
+  body:
+    data:
+      quantity: "1"
+      productId: "100001"
 response:
   status_code: 200
   resp_values:
